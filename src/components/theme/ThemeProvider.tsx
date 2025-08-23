@@ -24,8 +24,10 @@ export function ThemeProvider({
     if (theme === 'dark') root.classList.add('dark')
     else root.classList.remove('dark')
     // store both cookie + localStorage (cookie lets the server know on first paint)
-    document.cookie = `theme=${theme}; path=/; max-age=31536000`
-    try { localStorage.setItem('theme', theme) } catch {}
+    const secure = process.env.NODE_ENV === 'production'
+    document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax${secure ? '; Secure' : ''}`
+    try { localStorage.setItem('theme', theme) } 
+    catch {}
   }, [theme])
 
   const value = useMemo(
