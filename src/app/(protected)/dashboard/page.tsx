@@ -18,7 +18,7 @@ export default function Dashboard() {
   return (
     <main className="p-6 space-y-4 max-w-xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Prior Auth Requirements</h1>
+        <div className="text-2xl font-semibold text-black dark:text-white">Prior Auth Requirements</div>
         <form action="/api/auth/logout" method="post">
           <button className="btn" type="submit">
             Logout
@@ -36,13 +36,13 @@ export default function Dashboard() {
           Check
         </button>
       </div>
-      {err && <p className="text-red-600 text-sm">{err}</p>}
+      {err && <p className="text-red-600 dark:text-red-400 text-sm">{err}</p>}
       {result && (
-        <div className="border rounded-2xl p-4">
-          <p className="mb-2">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-4 bg-white dark:bg-black">
+          <p className="mb-2 text-black dark:text-white">
             Requires Auth: <strong>{String(result.requiresAuth)}</strong>
           </p>
-          <ul className="list-disc pl-5 space-y-1">
+          <ul className="list-disc pl-5 space-y-1 text-black dark:text-white">
             {result.requiredDocs.map((d) => (
               <li key={d}>{d}</li>
             ))}

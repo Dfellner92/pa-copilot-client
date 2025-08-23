@@ -1,37 +1,104 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Ensure dark mode works with Tailwind */
+.dark body {
+  background-color: black !important;
+}
+
+/* Force dark mode styles for specific elements */
+.dark header {
+  background-color: black !important;
+  border-color: #374151 !important;
+}
+
+/* Only set text color for specific elements, not all elements */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6,
+.dark p, .dark span, .dark div, .dark label {
+  color: white !important;
+}
+
+/* Ensure header text is white in dark mode */
+.dark header * {
+  color: white !important;
+}
+
+.dark main {
+  background-color: black !important;
+}
+
+.dark aside {
+  background-color: black !important;
+  border-color: #374151 !important;
+}
+
+.dark aside span {
+  color: white !important;
+}
+
+.dark .input {
+  background-color: black !important;
+  color: white !important;
+  border-color: #374151 !important;
 }
 
 .input { 
   width: 100%; 
-  border: 1px solid; 
+  border: 1px solid #d1d5db; 
   border-radius: 0.75rem; 
   padding: 0.5rem 0.75rem; 
   outline: none; 
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); 
+  background-color: white;
+  color: black;
 }
+
+.input::placeholder {
+  color: #6b7280;
+}
+
+.dark .input {
+  border-color: #4b5563;
+  background-color: black;
+  color: white;
+}
+
+.dark .input::placeholder {
+  color: #9ca3af;
+}
+
 .btn { 
   display: inline-flex; 
   align-items: center; 
   justify-content: center; 
   border-radius: 0.75rem; 
   padding: 0.5rem 0.75rem; 
-  border: 1px solid; 
+  border: 1px solid #d1d5db; 
   font-weight: 500; 
+  transition: all 0.2s;
+  background-color: white;
+  color: black;
+}
+
+.dark .btn {
+  border-color: #4b5563;
+  background-color: black;
+  color: white;
+}
+
+.btn:hover {
+  background-color: #f9fafb;
+}
+
+.dark .btn:hover {
+  background-color: #1f2937;
+}
+
+/* Ensure DarkModeToggle button works properly in dark mode */
+.dark button[aria-label="Toggle theme"] {
+  background-color: white !important;
+  color: black !important;
 }

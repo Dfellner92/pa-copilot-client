@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import AppShell from '@/components/layout/AppShell'
 
 function readJwtExp(token: string | undefined): number | null {
   if (!token) return null
@@ -19,5 +20,5 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const valid = !!token && !!exp && exp > now
 
   if (!valid) redirect('/login')
-  return <>{children}</>
+  return <AppShell>{children}</AppShell>
 }
