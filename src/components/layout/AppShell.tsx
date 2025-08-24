@@ -7,8 +7,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(true)
   const pathname = usePathname()
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/')
+  const isActive = (href: string) => {
+    // Exact match only - no parent/child highlighting
+    return pathname === href;
+  }
 
   const baseLink = 'btn nav'
   const activeLink = 'active'
