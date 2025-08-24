@@ -97,6 +97,39 @@ body {
   background-color: #1f2937;
 }
 
+/* Active state styles with higher specificity */
+.btn.active {
+  background-color: #e5e7eb !important;
+  font-weight: 600 !important;
+}
+
+.dark .btn.active {
+  background-color: #1f2937 !important;
+  font-weight: 600 !important;
+}
+
+/* Navigation button styles */
+.btn.nav {
+  background-color: white;
+  color: black;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.dark .btn.nav {
+  background-color: black;
+  color: white;
+  border: 1px solid #374151;
+}
+
+.btn.nav:hover {
+  background-color: #f9fafb;
+}
+
+.dark .btn.nav:hover {
+  background-color: #1f2937;
+}
+
 /* Ensure DarkModeToggle button works properly in dark mode */
 .dark button[aria-label="Toggle theme"] {
   background-color: white !important;
