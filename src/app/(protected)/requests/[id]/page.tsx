@@ -31,17 +31,27 @@ export default function RequestDetailPage() {
 
   const [data, setData] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [notFound, setNotFound] = useState(false)
   const [reqs, setReqs] = useState<RequirementsOut | null>(null)
 
   const detailAbort = useRef<AbortController | null>(null)
   const reqsAbort = useRef<AbortController | null>(null)
+  const didLoadRef = useRef<string | null>(null)
+  const didReqRef = useRef<string | null>(null)
 
-  // ---- helpers ----
+  // Don’t fetch obviously bad slugs (prevents /requests/new hitting this page)
+  const isUuid = useMemo(
+    () =>
+      typeof id === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+    [id]
+  )
+
   const mapDetail = (json: any): Detail => ({
     id: String(json.id ?? json.requestId ?? id),
     status: String(json.status ?? 'pending'),
-    updatedAt: json.updatedAt ?? json.updated_at ?? json.modifiedAt ?? null,
-    createdAt: json.createdAt ?? json.created_at ?? null,
+    updatedAt: json.updatedAt ?? json.updated_at ?? json.modifiedAt ?? undefined,
+    createdAt: json.createdAt ?? json.created_at ?? undefined,
     memberName: json.memberName ?? json.member?.name ?? '',
     memberId: json.memberId ?? json.member?.id ?? '',
     memberDob: json.memberDob ?? json.member?.dob ?? '',
@@ -53,30 +63,27 @@ export default function RequestDetailPage() {
     attachments: json.attachments ?? [],
   })
 
+  // Fetch detail — run once per id (Strict Mode safe)
   const loadDetail = useCallback(async () => {
+    if (!isUuid) { setNotFound(true); setData(null); return }
+    if (didLoadRef.current === id) return
+    didLoadRef.current = id
+
     detailAbort.current?.abort()
     detailAbort.current = new AbortController()
     const signal = detailAbort.current.signal
 
     setLoading(true)
+    setNotFound(false)
     try {
       const r = await fetch(`/api/prior-auth/requests/${encodeURIComponent(id)}`, {
         cache: 'no-store',
         signal,
       })
       if (!r.ok) {
-        if (r.status === 401) {
-          toastError('Session expired, please log in again')
-          window.location.href = '/login'
-          return
-        }
-        if (r.status === 404) {
-          toastError('Request not found')
-          router.replace('/requests')
-          return
-        }
-        toastError('Failed to load request')
-        return
+        if (r.status === 401) { toastError('Session expired, please log in again'); window.location.href = '/login'; return }
+        if (r.status === 404) { if (!signal.aborted) { setNotFound(true); setData(null) } return }
+        toastError('Failed to load request'); return
       }
       const json = await r.json()
       if (!signal.aborted) setData(mapDetail(json))
@@ -85,17 +92,18 @@ export default function RequestDetailPage() {
     } finally {
       if (!signal.aborted) setLoading(false)
     }
-  }, [id, router, toastError])
+  }, [id, isUuid, toastError])
 
+  // Fetch requirements snapshot — run once per primaryCode
   const loadRequirements = useCallback(async (code: string) => {
+    if (!code) { setReqs(null); return }
+    if (didReqRef.current === code) return
+    didReqRef.current = code
+
     reqsAbort.current?.abort()
     reqsAbort.current = new AbortController()
     const signal = reqsAbort.current.signal
 
-    if (!code) {
-      setReqs(null)
-      return
-    }
     try {
       const r = await fetch(`/api/requirements?code=${encodeURIComponent(code)}`, {
         cache: 'no-store',
@@ -106,11 +114,10 @@ export default function RequestDetailPage() {
         setReqs(json)
       }
     } catch {
-      /* ignore for snapshot */
+      /* ignore snapshot errors */
     }
   }, [])
 
-  // ---- effects call the named loaders ----
   useEffect(() => {
     loadDetail()
     return () => detailAbort.current?.abort()
@@ -123,16 +130,21 @@ export default function RequestDetailPage() {
     return () => reqsAbort.current?.abort()
   }, [primaryCode, loadRequirements])
 
-  // ---- UI actions ----
   const copyId = async () => {
-    try {
-      await navigator.clipboard.writeText(id)
-      success('Request ID copied')
-    } catch {}
+    try { await navigator.clipboard.writeText(id); success('Request ID copied') } catch {}
   }
 
-  // ---- render ----
-  if (loading && !data) {
+  // ----- Render states -----
+  if (!isUuid) {
+    return (
+      <main className="p-6 max-w-3xl mx-auto">
+        <div className="rounded-2xl border p-6 text-sm text-gray-500">Invalid request id.</div>
+        <Button onClick={() => router.push('/requests')}>Back to list</Button>
+      </main>
+    )
+  }
+
+  if (loading && !data && !notFound) {
     return (
       <main className="p-6 space-y-4 max-w-3xl mx-auto">
         <div className="rounded-2xl border p-6 text-sm text-gray-500">Loading…</div>
@@ -140,10 +152,10 @@ export default function RequestDetailPage() {
     )
   }
 
-  if (!data) {
+  if (notFound || !data) {
     return (
       <main className="p-6 space-y-4 max-w-3xl mx-auto">
-        <div className="rounded-2xl border p-6 text-sm text-gray-500">No data.</div>
+        <div className="rounded-2xl border p-6 text-sm text-gray-500">Request not found.</div>
         <Button onClick={() => router.push('/requests')}>Back to list</Button>
       </main>
     )
@@ -224,9 +236,7 @@ export default function RequestDetailPage() {
         {data.attachments?.length ? (
           <ul className="list-disc pl-5 text-sm space-y-1">
             {data.attachments.map(a => (
-              <li key={a.id}>
-                {a.name || a.id}
-              </li>
+              <li key={a.id}>{a.name || a.id}</li>
             ))}
           </ul>
         ) : (
