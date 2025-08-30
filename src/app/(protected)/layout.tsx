@@ -1,3 +1,4 @@
+// frontend/app/(protected)/layout.tsx
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/layout/AppShell'
@@ -16,20 +17,24 @@ const ProtectedLayout = async ({ children }: { children: React.ReactNode }) => {
   const token = (await cookies()).get(cookieName)?.value
   const payload = decodeJwt(token)
 
-  // check expiration
   const now = Math.floor(Date.now() / 1000)
   const exp = payload?.exp as number | undefined
   const valid = !!token && !!exp && exp > now
-
   if (!valid) redirect('/login')
 
-  const roles: string[] = Array.isArray(payload?.roles) ? payload.roles : []
-  if (!roles.includes('clinician')) {
-    // either redirect to /login or a /403 page
-    redirect('/login')
-  }
+  // ← NEW: coerce roles to an array and check
+  const rawRoles = payload?.roles
+  const roles: string[] =
+    Array.isArray(rawRoles)
+      ? rawRoles
+      : typeof rawRoles === 'string'
+        ? rawRoles.split(/[,\s]+/).filter(Boolean)
+        : []
+
+  const hasClinician = roles.includes('clinician')
+  if (!hasClinician) redirect('/login')
 
   return <AppShell>{children}</AppShell>
 }
 
-export default ProtectedLayout;
+export default ProtectedLayout

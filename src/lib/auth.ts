@@ -1,0 +1,1 @@
+export const COOKIE_NAME = process.env.JWT_COOKIE_NAME ?? 'pa_token';

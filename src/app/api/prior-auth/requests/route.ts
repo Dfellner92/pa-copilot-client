@@ -1,23 +1,51 @@
-import { NextResponse } from 'next/server'
+// app/api/prior-auth/requests/route.ts
+import { NextRequest, NextResponse } from 'next/server'
 import { proxyBackend } from '@/lib/proxy'
 
-export async function POST(req: Request) {
+const COOKIE = process.env.JWT_COOKIE_NAME || 'pa_token'
+
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.arrayBuffer() // read once
+    const bodyBuf = await req.arrayBuffer()
+
+    const token = req.cookies.get(COOKIE)?.value
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    }
+    if (token) headers.Authorization = `Bearer ${token}`
+
     const upstream = await proxyBackend('/v1/prior-auth/requests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body, // forward raw
+      headers,
+      body: bodyBuf,
+      timeoutMs: 15000,
     })
 
-    // forward upstream body/status/ct exactly (prevents JSON parse errors)
-    const buf = await upstream.arrayBuffer()
-    const headers = new Headers()
-    const ct = upstream.headers.get('content-type')
-    if (ct) headers.set('content-type', ct)
-    return new NextResponse(buf, { status: upstream.status, headers })
-  } catch (err) {
-    console.error('[api] create prior-auth failed:', err)
-    return NextResponse.json({ error: 'Proxy error' }, { status: 500 })
+    // Always read body as text first (it might not be JSON on errors)
+    const text = await upstream.text()
+
+    // Helpful console for dev (shows status + error body)
+    console.log('[prior-auth upstream]', upstream.status, text)
+
+    // Propagate exactly on success
+    if (upstream.ok) {
+      return new NextResponse(text, {
+        status: upstream.status,
+        headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
+      })
+    }
+
+    // On error, bubble the backend message through
+    return new NextResponse(text || 'Upstream error', {
+      status: upstream.status,
+      headers: { 'content-type': upstream.headers.get('content-type') ?? 'text/plain' },
+    })
+  } catch (err: any) {
+    console.error('[api] prior-auth proxy failed:', err)
+    return NextResponse.json(
+      { error: `Proxy error: ${err?.message ?? String(err)}` },
+      { status: 500 }
+    )
   }
 }
