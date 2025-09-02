@@ -67,6 +67,11 @@ export default function RequestDetailClient({ data }: { data: Detail }) {
     try { await navigator.clipboard.writeText(data.id); success('Request ID copied') } catch {}
   }
 
+  const codes = Array.isArray(data.codes) ? data.codes : (data.codes ? [String(data.codes as any)] : [])
+  const diagnoses = Array.isArray(data.diagnosisCodes)
+  ? data.diagnosisCodes
+  : (data.diagnosisCodes ? [String(data.diagnosisCodes as any)] : [])
+
   return (
     <>
       {/* Header */}
@@ -90,8 +95,8 @@ export default function RequestDetailClient({ data }: { data: Detail }) {
         <div className="rounded-2xl border p-4">
           <h2 className="font-medium mb-2">Procedure</h2>
           <div className="space-y-1 text-sm">
-            <div><span className="text-gray-500">Codes:</span> {data.codes?.length ? data.codes.join(', ') : '—'}</div>
-            <div><span className="text-gray-500">Diagnoses:</span> {data.diagnosisCodes?.length ? data.diagnosisCodes.join(', ') : '—'}</div>
+          <div><span className="text-gray-500">Codes:</span> {codes.length ? codes.join(', ') : '—'}</div>
+          <div><span className="text-gray-500">Diagnoses:</span> {diagnoses.length ? diagnoses.join(', ') : '—'}</div>
             {data.notes ? <div><span className="text-gray-500">Notes:</span> {data.notes}</div> : null}
           </div>
         </div>
