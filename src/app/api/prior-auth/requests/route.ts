@@ -166,6 +166,9 @@ export async function POST(req: NextRequest) {
       coverage_id: coverage,
       code,
       diagnosis_codes: dx,
+      // NEW: Include provider fields
+      provider_name: incoming.provider_name || null,
+      provider_npi: incoming.provider_npi || null,
     }
 
     const upstream = await proxyBackend('/v1/prior-auth/requests', {

@@ -183,6 +183,10 @@ export default function NewRequestPage() {
         last_name:
           values.member_name?.trim()?.split(/\s+/).slice(1).join(' ') || undefined,
         birth_date: values.member_dob?.trim() || undefined,
+        
+        // NEW: Include provider information
+        provider_name: values.provider_name?.trim() || undefined,
+        provider_npi: values.provider_npi?.trim() || undefined,
       }
       
       console.log('[DEBUG] Final payload for prior auth request:', payload)
