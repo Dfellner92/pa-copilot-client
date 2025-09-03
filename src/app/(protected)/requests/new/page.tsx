@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   useForm,
@@ -14,8 +14,8 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/toast/ToastProvider'
 
 /** Schema: backend requires these today */
-const schema = z.object({
-  patient_id: z.string().min(1, 'Patient ID is required'),
+const baseSchema = z.object({
+  patient_id: z.string().optional(),
   coverage_id: z.string().min(1, 'Coverage ID is required'),
   code: z.string().min(1, 'Procedure code is required'),
   diagnosis_codes: z.array(z.string().min(1)),
@@ -27,7 +27,8 @@ const schema = z.object({
   provider_name: z.string().optional(),
   provider_npi: z.string().optional(),
 })
-type FormValues = z.infer<typeof schema>
+
+type FormValues = z.infer<typeof baseSchema>
 
 const steps = ['Member', 'Provider', 'Procedure', 'Review'] as const
 type Step = (typeof steps)[number]
@@ -37,9 +38,10 @@ export default function NewRequestPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('Member')
   const [submitting, setSubmitting] = useState(false)
+  const [createNewPatient, setCreateNewPatient] = useState(false)
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(baseSchema),
     defaultValues: {
       patient_id: '',
       coverage_id: '',
@@ -55,16 +57,36 @@ export default function NewRequestPage() {
   })
 
   const next = async () => {
+    // Custom validation based on createNewPatient flag
     const fieldsByStep: Record<Step, (keyof FormValues)[]> = {
-      Member: ['patient_id', 'coverage_id', 'member_name', 'member_id', 'member_dob'],
+      Member: createNewPatient 
+        ? ['coverage_id', 'member_name', 'member_dob'] // Don't require patient_id when creating new
+        : ['patient_id', 'coverage_id', 'member_name', 'member_id', 'member_dob'],
       Provider: ['provider_name', 'provider_npi'],
       Procedure: ['code'],
       Review: [],
     }
     const fields = fieldsByStep[step]
     if (fields.length) {
-      const ok = await form.trigger(fields as any, { shouldFocus: true })
-      if (!ok) return
+      // Custom validation for createNewPatient mode
+      if (createNewPatient && step === 'Member') {
+        const values = form.getValues()
+        if (!values.member_name?.trim()) {
+          form.setError('member_name', { message: 'Name is required when creating new patient' })
+          return
+        }
+        if (!values.member_dob?.trim()) {
+          form.setError('member_dob', { message: 'DOB is required when creating new patient' })
+          return
+        }
+        if (!values.coverage_id?.trim()) {
+          form.setError('coverage_id', { message: 'Coverage ID is required' })
+          return
+        }
+      } else {
+        const ok = await form.trigger(fields as any, { shouldFocus: true })
+        if (!ok) return
+      }
     }
     const i = steps.indexOf(step)
     if (i < steps.length - 1) setStep(steps[i + 1])
@@ -73,14 +95,98 @@ export default function NewRequestPage() {
   const prev = () => setStep(steps[Math.max(0, steps.indexOf(step) - 1)])
 
   const onSubmit = async (values: FormValues) => {
+    console.log('[DEBUG] Form submitted with values:', values)
+    console.log('[DEBUG] createNewPatient flag:', createNewPatient)
+    
     setSubmitting(true)
     try {
+      let patientId = values.patient_id
+      
+      // If creating a new patient, generate a UUID and create the patient first
+      if (createNewPatient) {
+        const patientData = {
+          external_id: `member-${Date.now()}`,
+          first_name: values.member_name?.trim()?.split(/\s+/)[0] || 'Unknown',
+          last_name: values.member_name?.trim()?.split(/\s+/).slice(1).join(' ') || 'Member',
+          birth_date: values.member_dob?.trim() || '1900-01-01',
+        }
+        
+        console.log('[DEBUG] Creating new patient with data:', patientData)
+        
+        const newPatientResponse = await fetch('/api/patients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patientData),
+        })
+        
+        console.log('[DEBUG] Patient creation response status:', newPatientResponse.status)
+        const patientResponseText = await newPatientResponse.text()
+        console.log('[DEBUG] Patient creation response:', patientResponseText)
+        
+        if (!newPatientResponse.ok) {
+          console.error('[DEBUG] Patient creation failed:', patientResponseText)
+          error('Failed to create new patient')
+          return
+        }
+        
+        const newPatient = JSON.parse(patientResponseText)
+        console.log('[DEBUG] New patient created:', newPatient)
+        
+        // Now create a coverage for this patient
+        const coverageData = {
+          external_id: `coverage-${Date.now()}`,
+          member_id: `M${Date.now()}`,
+          plan: 'Standard Plan',
+          payer: 'Test Payer',
+          patient_id: newPatient.id,
+        }
+        
+        console.log('[DEBUG] Creating new coverage with data:', coverageData)
+        
+        const newCoverageResponse = await fetch('/api/coverages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(coverageData),
+        })
+        
+        console.log('[DEBUG] Coverage creation response status:', newCoverageResponse.status)
+        const coverageResponseText = await newCoverageResponse.text()
+        console.log('[DEBUG] Coverage creation response:', coverageResponseText)
+        
+        if (!newCoverageResponse.ok) {
+          console.error('[DEBUG] Coverage creation failed:', coverageResponseText)
+          error('Failed to create new coverage')
+          return
+        }
+        
+        const newCoverage = JSON.parse(coverageResponseText)
+        console.log('[DEBUG] New coverage created:', newCoverage)
+        
+        patientId = newPatient.id
+        // Update the coverage_id in the form values
+        values.coverage_id = newCoverage.id
+      }
+
       const payload = {
-        patient_id: values.patient_id,
+        patient_id: patientId,
         coverage_id: values.coverage_id,
         code: values.code,
         diagnosis_codes: values.diagnosis_codes ?? [],
+      
+        // NEW: forward what the user typed so the proxy/backend can upsert/resolve a Patient
+        member_name: values.member_name?.trim() || undefined,
+        member_dob: values.member_dob?.trim() || undefined,
+      
+        // Optional: also send split fields for backends that prefer them
+        first_name:
+          values.member_name?.trim()?.split(/\s+/)[0] || undefined,
+        last_name:
+          values.member_name?.trim()?.split(/\s+/).slice(1).join(' ') || undefined,
+        birth_date: values.member_dob?.trim() || undefined,
       }
+      
+      console.log('[DEBUG] Final payload for prior auth request:', payload)
+      
       const r = await fetch('/api/prior-auth/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +204,8 @@ export default function NewRequestPage() {
       const json = await r.json()
       success('Request created')
       router.push(`/requests/${encodeURIComponent(String(json.id))}`)
-    } catch {
+    } catch (err) {
+      console.error('[DEBUG] Error in onSubmit:', err)
       error('Network error creating request')
     } finally {
       setSubmitting(false)
@@ -115,10 +222,10 @@ export default function NewRequestPage() {
 
       <FormProvider {...form}>
         <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)} noValidate>
-          {step === 'Member' && <MemberStep />}
+          {step === 'Member' && <MemberStep createNewPatient={createNewPatient} setCreateNewPatient={setCreateNewPatient} />}
           {step === 'Provider' && <ProviderStep />}
           {step === 'Procedure' && <ProcedureStep />}
-          {step === 'Review' && <ReviewStep />}
+          {step === 'Review' && <ReviewStep createNewPatient={createNewPatient} />}
 
           <div className="flex items-center justify-between pt-2">
             <div className="flex gap-2">
@@ -184,18 +291,45 @@ function Field({
 
 /* ---------- Steps ---------- */
 
-function MemberStep() {
+function MemberStep({ createNewPatient, setCreateNewPatient }: { createNewPatient: boolean; setCreateNewPatient: (value: boolean) => void }) {
   return (
     <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="rounded-2xl border p-4 space-y-3">
         <h2 className="font-medium mb-1">Member</h2>
-        <Field name="member_name" label="Name" placeholder="Jane Doe" />
-        <Field name="member_id" label="Member ID" placeholder="M12345" />
-        <Field name="member_dob" label="DOB" placeholder="YYYY-MM-DD" />
+        
+        {/* Toggle for creating new patient */}
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            id="createNewPatient"
+            checked={createNewPatient}
+            onChange={(e) => setCreateNewPatient(e.target.checked)}
+            className="rounded"
+          />
+          <label htmlFor="createNewPatient" className="text-sm font-medium">
+            Create new patient
+          </label>
+        </div>
+        
+        {createNewPatient ? (
+          <>
+            <Field name="member_name" label="Name *" placeholder="John Smith" />
+            <Field name="member_dob" label="DOB *" placeholder="YYYY-MM-DD" />
+            <p className="text-xs text-gray-500">* A new patient will be created with this information</p>
+          </>
+        ) : (
+          <>
+            <Field name="member_name" label="Name" placeholder="Jane Doe" />
+            <Field name="member_id" label="Member ID" placeholder="M12345" />
+            <Field name="member_dob" label="DOB" placeholder="YYYY-MM-DD" />
+          </>
+        )}
       </div>
       <div className="rounded-2xl border p-4 space-y-3">
         <h2 className="font-medium mb-1">Coverage</h2>
-        <Field name="patient_id" label="Patient ID *" placeholder="patient-123" />
+        {!createNewPatient && (
+          <Field name="patient_id" label="Patient ID *" placeholder="patient-123" />
+        )}
         <Field name="coverage_id" label="Coverage ID *" placeholder="coverage-abc" />
         <p className="text-xs text-gray-500">* required to submit</p>
       </div>
@@ -240,7 +374,7 @@ function ProcedureStep() {
   )
 }
 
-function ReviewStep() {
+function ReviewStep({ createNewPatient }: { createNewPatient: boolean }) {
   const { getValues } = useFormContext<FormValues>()
   const v = getValues()
   return (
@@ -248,9 +382,9 @@ function ReviewStep() {
       <div className="rounded-2xl border p-4">
         <h3 className="font-medium mb-2">Member</h3>
         <Item k="Name" v={v.member_name} />
-        <Item k="Member ID" v={v.member_id} />
+        {!createNewPatient && <Item k="Member ID" v={v.member_id} />}
         <Item k="DOB" v={v.member_dob} />
-        <Item k="Patient ID *" v={v.patient_id} />
+        {!createNewPatient && <Item k="Patient ID *" v={v.patient_id} />}
         <Item k="Coverage ID *" v={v.coverage_id} />
       </div>
       <div className="rounded-2xl border p-4">
