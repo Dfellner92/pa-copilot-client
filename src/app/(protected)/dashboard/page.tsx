@@ -111,9 +111,6 @@ export default function Dashboard() {
     <main className="p-6 space-y-5 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Prior Auth Requirements</h1>
-        <form action="/api/auth/logout" method="post">
-          <Button type="submit">Logout</Button>
-        </form>
       </div>
 
       <ReactHookFormWrapper

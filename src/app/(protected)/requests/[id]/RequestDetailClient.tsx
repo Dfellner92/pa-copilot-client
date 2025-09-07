@@ -42,25 +42,52 @@ export default function RequestDetailClient({ data }: { data: Detail }) {
   }, [])
 
   useEffect(() => {
-    if (!primaryCode) { setReqs(null); return }
+    if (!primaryCode) { 
+      setReqs(null); 
+      return 
+    }
+    
+    // Abort any existing request
     reqsAbort.current?.abort()
     reqsAbort.current = new AbortController()
     const signal = reqsAbort.current.signal
 
     ;(async () => {
       try {
+        console.log('[DEBUG] Fetching requirements for code:', primaryCode)
         const r = await fetch(`/api/requirements?code=${encodeURIComponent(primaryCode)}`, {
           cache: 'no-store',
           signal,
         })
+        console.log('[DEBUG] Requirements response status:', r.status)
+        
         if (r.ok) {
           const json: RequirementsOut = await r.json()
-          if (mountedRef.current) setReqs(json)
+          console.log('[DEBUG] Requirements response:', json)
+          
+          // Only set state if the request wasn't aborted
+          if (!signal.aborted) {
+            setReqs(json)
+            console.log('[DEBUG] Set requirements state:', json)
+          } else {
+            console.log('[DEBUG] Request was aborted, not setting state')
+          }
+        } else {
+          console.log('[DEBUG] Requirements request failed:', r.status, await r.text())
         }
-      } catch {
-        /* ignore snapshot errors */
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.log('[DEBUG] Requirements request aborted (expected)')
+        } else {
+          console.log('[DEBUG] Requirements request error:', err)
+        }
       }
     })()
+
+    // Cleanup function
+    return () => {
+      reqsAbort.current?.abort()
+    }
   }, [primaryCode])
 
   const copyId = async () => {
@@ -77,7 +104,7 @@ export default function RequestDetailClient({ data }: { data: Detail }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold">Request {data.id.slice(0, 8)}…</h1>
+          <h1 className="text-xl font-semibold">{`Request ${data.id}`}</h1>
           <div className="flex gap-3 text-sm text-gray-500">
             {data.createdAt && <span>Created: {new Date(data.createdAt).toLocaleString()}</span>}
             {data.updatedAt && <span>Updated: {new Date(data.updatedAt).toLocaleString()}</span>}
